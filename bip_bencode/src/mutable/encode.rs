@@ -30,7 +30,7 @@ fn encode_bytes(list: &[u8], bytes: &mut Vec<u8>) {
     bytes.extend(list.iter().map(|n| *n));
 }
 
-fn encode_list<T>(list: &BListAccess<T>, bytes: &mut Vec<u8>)
+fn encode_list<T>(list: &dyn BListAccess<T>, bytes: &mut Vec<u8>)
     where T: BRefAccess, T::BKey: AsRef<[u8]> {
     bytes.push(::LIST_START);
 
@@ -41,7 +41,7 @@ fn encode_list<T>(list: &BListAccess<T>, bytes: &mut Vec<u8>)
     bytes.push(::BEN_END);
 }
 
-fn encode_dict<'a, K, V>(dict: &BDictAccess<K, V>, bytes: &mut Vec<u8>)
+fn encode_dict<'a, K, V>(dict: &dyn BDictAccess<K, V>, bytes: &mut Vec<u8>)
     where K: AsRef<[u8]>, V: BRefAccess, V::BKey: AsRef<[u8]> {
     // Need To Sort The Keys In The Map Before Encoding
     let mut sort_dict = dict.to_list();

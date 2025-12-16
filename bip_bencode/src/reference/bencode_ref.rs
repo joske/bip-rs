@@ -37,8 +37,8 @@ pub struct BencodeRef<'a> {
 impl<'a> BencodeRef<'a> {
     /// Decode the given bytes into a `BencodeRef` using the given decode options.
     pub fn decode(bytes: &'a [u8], opts: BDecodeOpt) -> BencodeParseResult<BencodeRef<'a>> {
-        // Apply try so any errors return before the eof check
-        let (bencode, end_pos) = try!(decode::decode(bytes, 0, opts, 0));
+        // Propagate decode errors before the eof check
+        let (bencode, end_pos) = decode::decode(bytes, 0, opts, 0)?;
 
         if end_pos != bytes.len() && opts.enforce_full_decode() {
             return Err(BencodeParseError::from_kind(BencodeParseErrorKind::BytesEmpty{ pos: end_pos }));
@@ -86,14 +86,14 @@ impl<'a> BRefAccess for BencodeRef<'a> {
         self.bytes_ext()
     }
 
-    fn list(&self) -> Option<&BListAccess<BencodeRef<'a>>> {
+    fn list(&self) -> Option<&dyn BListAccess<BencodeRef<'a>>> {
         match self.inner {
             InnerBencodeRef::List(ref n, _) => Some(n),
             _ => None,
         }
     }
 
-    fn dict(&self) -> Option<&BDictAccess<&'a [u8], BencodeRef<'a>>> {
+    fn dict(&self) -> Option<&dyn BDictAccess<&'a [u8], BencodeRef<'a>>> {
         match self.inner {
             InnerBencodeRef::Dict(ref n, _) => Some(n),
             _ => None,

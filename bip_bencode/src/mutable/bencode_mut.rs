@@ -100,14 +100,14 @@ impl<'a> BRefAccess for BencodeMut<'a> {
         }
     }
 
-    fn list(&self) -> Option<&BListAccess<BencodeMut<'a>>> {
+    fn list(&self) -> Option<&dyn BListAccess<BencodeMut<'a>>> {
         match self.inner {
             InnerBencodeMut::List(ref n) => Some(n),
             _ => None,
         }
     }
 
-    fn dict(&self) -> Option<&BDictAccess<Cow<'a, [u8]>, BencodeMut<'a>>> {
+    fn dict(&self) -> Option<&dyn BDictAccess<Cow<'a, [u8]>, BencodeMut<'a>>> {
         match self.inner {
             InnerBencodeMut::Dict(ref n) => Some(n),
             _ => None,
@@ -125,14 +125,14 @@ impl<'a> BMutAccess for BencodeMut<'a> {
         }
     }
 
-    fn list_mut(&mut self) -> Option<&mut BListAccess<BencodeMut<'a>>> {
+    fn list_mut(&mut self) -> Option<&mut dyn BListAccess<BencodeMut<'a>>> {
         match self.inner {
             InnerBencodeMut::List(ref mut n) => Some(n),
             _ => None
         }
     }
 
-    fn dict_mut(&mut self) -> Option<&mut BDictAccess<Cow<'a, [u8]>, BencodeMut<'a>>> {
+    fn dict_mut(&mut self) -> Option<&mut dyn BDictAccess<Cow<'a, [u8]>, BencodeMut<'a>>> {
         match self.inner {
             InnerBencodeMut::Dict(ref mut n) => Some(n),
             _ => None
