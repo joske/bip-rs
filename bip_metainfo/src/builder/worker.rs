@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::Arc;
 use std::thread;
 
 use bip_util::sha::ShaHash;
-use crossbeam::sync::MsQueue;
+use crossbeam::channel::{unbounded, Receiver as WorkReceiver, Sender as WorkSender};
 
 use accessor::{Accessor, PieceAccess};
 use builder::buffer::{PieceBuffers, PieceBuffer};
@@ -40,7 +40,7 @@ pub fn start_hasher_workers<A, C>(accessor: A,
     let (prog_send, prog_recv) = mpsc::channel();
 
     // Create queue to push work to and pull work from
-    let work_queue = Arc::new(MsQueue::new());
+    let (work_sender, work_receiver) = unbounded();
 
     // Create buffer allocator to reuse pre allocated buffers
     let piece_buffers = Arc::new(PieceBuffers::new(piece_length, num_workers));
@@ -48,11 +48,11 @@ pub fn start_hasher_workers<A, C>(accessor: A,
     // Create n worker threads that pull work from the queue
     for _ in 0..num_workers {
         let share_master_send = master_send.clone();
-        let share_work_queue = work_queue.clone();
+        let worker_recv = work_receiver.clone();
         let share_piece_buffers = piece_buffers.clone();
 
         thread::spawn(move || {
-            start_hash_worker(share_master_send, share_work_queue, share_piece_buffers);
+            start_hash_worker(share_master_send, worker_recv, share_piece_buffers);
         });
     }
 
@@ -65,7 +65,7 @@ pub fn start_hasher_workers<A, C>(accessor: A,
     start_hash_master(accessor,
                       num_workers,
                       master_recv,
-                      work_queue,
+                      work_sender,
                       piece_buffers,
                       prog_send)
 }
@@ -77,7 +77,7 @@ pub fn start_hasher_workers<A, C>(accessor: A,
 fn start_hash_master<A>(accessor: A,
                         num_workers: usize,
                         recv: Receiver<MasterMessage>,
-                        work: Arc<MsQueue<WorkerMessage>>,
+                        work: WorkSender<WorkerMessage>,
                         buffers: Arc<PieceBuffers>,
                         progress_sender: Sender<usize>)
                         -> ParseResult<Vec<(usize, ShaHash)>>
@@ -103,7 +103,7 @@ fn start_hash_master<A>(accessor: A,
                         try!(curr_piece_buffer.write_bytes(|buffer| piece_region.read(buffer))) == 0;
 
                     if curr_piece_buffer.is_whole() {
-                        work.push(WorkerMessage::HashPiece(piece_index, curr_piece_buffer));
+                        work.send(WorkerMessage::HashPiece(piece_index, curr_piece_buffer)).unwrap();
 
                         piece_index += 1;
                         curr_piece_buffer = buffers.checkout();
@@ -129,7 +129,7 @@ fn start_hash_master<A>(accessor: A,
     // If we still have a partial piece left over, push it to the workers
     if let Some(piece_buffer) = opt_piece_buffer {
         if !piece_buffer.is_empty() {
-            work.push(WorkerMessage::HashPiece(piece_index, piece_buffer));
+            work.send(WorkerMessage::HashPiece(piece_index, piece_buffer)).unwrap();
 
             piece_index += 1;
             if progress_sender.send(piece_index).is_err() {
@@ -140,7 +140,7 @@ fn start_hash_master<A>(accessor: A,
 
     // No more entries, tell workers to shut down
     for _ in 0..num_workers {
-        work.push(WorkerMessage::Finish);
+        work.send(WorkerMessage::Finish).unwrap();
     }
 
     // Wait for all of the workers to finish up the last pieces
@@ -175,13 +175,13 @@ fn start_progress_updater<C>(recv: Receiver<usize>, num_pieces: u64, mut progres
 
 /// Starts a hasher worker which will hash all of the buffers it receives.
 fn start_hash_worker(send: Sender<MasterMessage>,
-                     work: Arc<MsQueue<WorkerMessage>>,
+                     work: WorkReceiver<WorkerMessage>,
                      buffers: Arc<PieceBuffers>) {
     let mut work_to_do = true;
 
     // Loop until we are instructed to stop working
     while work_to_do {
-        let work_item = work.pop();
+        let work_item = work.recv().unwrap();
 
         match work_item {
             WorkerMessage::Finish => {
@@ -208,7 +208,7 @@ mod tests {
     use std::sync::mpsc;
 
     use bip_util::sha::ShaHash;
-    use rand::{self, Rng};
+    use rand::{self, RngCore};
 
     use accessor::{Accessor, PieceAccess};
     use builder::worker;

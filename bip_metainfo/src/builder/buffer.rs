@@ -1,6 +1,6 @@
+use std::collections::VecDeque;
 use std::io;
-
-use crossbeam::sync::MsQueue;
+use std::sync::{Condvar, Mutex};
 
 // Ensures that we have enough buffers to keep workers busy.
 const TOTAL_BUFFERS_MULTIPLICATIVE: usize = 2;
@@ -8,32 +8,45 @@ const TOTAL_BUFFERS_ADDITIVE: usize = 0;
 
 /// Stores a set number of piece buffers to be used and re-used.
 pub struct PieceBuffers {
-    piece_queue: MsQueue<PieceBuffer>,
+    piece_queue: Mutex<VecDeque<PieceBuffer>>,
+    queue_not_empty: Condvar,
 }
 
 impl PieceBuffers {
     /// Create a new queue filled with a number of piece buffers based on the number of workers.
     pub fn new(piece_length: usize, num_workers: usize) -> PieceBuffers {
-        let piece_queue = MsQueue::new();
+        let mut piece_queue = VecDeque::new();
 
         let total_buffers = calculate_total_buffers(num_workers);
         for _ in 0..total_buffers {
-            piece_queue.push(PieceBuffer::new(piece_length));
+            piece_queue.push_back(PieceBuffer::new(piece_length));
         }
 
-        PieceBuffers { piece_queue: piece_queue }
+        PieceBuffers {
+            piece_queue: Mutex::new(piece_queue),
+            queue_not_empty: Condvar::new(),
+        }
     }
 
     /// Checkin the given piece buffer to be re-used.
     pub fn checkin(&self, mut buffer: PieceBuffer) {
         buffer.bytes_read = 0;
 
-        self.piece_queue.push(buffer);
+        let mut queue = self.piece_queue.lock().unwrap();
+        queue.push_back(buffer);
+        self.queue_not_empty.notify_one();
     }
 
     /// Checkout a piece buffer (possibly blocking) to be used.
     pub fn checkout(&self) -> PieceBuffer {
-        self.piece_queue.pop()
+        let mut queue = self.piece_queue.lock().unwrap();
+        loop {
+            if let Some(buffer) = queue.pop_front() {
+                return buffer;
+            }
+
+            queue = self.queue_not_empty.wait(queue).unwrap();
+        }
     }
 }
 
@@ -61,7 +74,8 @@ impl PieceBuffer {
     }
 
     pub fn write_bytes<C>(&mut self, mut callback: C) -> io::Result<usize>
-        where C: FnMut(&mut [u8]) -> io::Result<usize>
+    where
+        C: FnMut(&mut [u8]) -> io::Result<usize>,
     {
         let new_bytes_read = try!(callback(&mut self.buffer[self.bytes_read..]));
         self.bytes_read += new_bytes_read;
