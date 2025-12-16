@@ -1,9 +1,9 @@
 //! Utilities used by the Bittorrent Infrastructure Project.
 
-extern crate crypto;
+extern crate chrono;
 extern crate num;
 extern crate rand;
-extern crate chrono;
+extern crate sha1;
 
 /// Bittorrent specific types.
 pub mod bt;
@@ -37,10 +37,13 @@ pub mod error;
 //----------------------------------------------------------------------------//
 use std::mem;
 
+use rand::Rng;
+
 /// Applies a Fisher-Yates shuffle on the given list.
 pub fn fisher_shuffle<T: Default>(list: &mut [T]) {
+    let mut rng = rand::rng();
     for i in 0..list.len() {
-        let swap_index = (rand::random::<usize>() % (list.len() - i)) + i;
+        let swap_index = rng.random_range(i..list.len());
 
         // Can't push the src_val directly into the swap_index in case i and swap_index
         // are the same value (we will end up setting our index to the default value).
