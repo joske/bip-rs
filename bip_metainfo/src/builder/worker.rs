@@ -88,7 +88,7 @@ fn start_hash_master<A>(accessor: A,
 
     // Our closure may be called multiple times, save partial pieces buffers between calls
     let mut opt_piece_buffer = None;
-    try!(accessor.access_pieces(|piece_access| {
+    accessor.access_pieces(|piece_access| {
         match piece_access {
             PieceAccess::Compute(piece_region) => {
                 let mut curr_piece_buffer = if let Some(piece_buffer) = opt_piece_buffer.take() {
@@ -100,7 +100,7 @@ fn start_hash_master<A>(accessor: A,
                 let mut end_of_region = false;
                 while !end_of_region {
                     end_of_region =
-                        try!(curr_piece_buffer.write_bytes(|buffer| piece_region.read(buffer))) == 0;
+                        curr_piece_buffer.write_bytes(|buffer| piece_region.read(buffer))? == 0;
 
                     if curr_piece_buffer.is_whole() {
                         work.send(WorkerMessage::HashPiece(piece_index, curr_piece_buffer)).unwrap();
@@ -124,7 +124,7 @@ fn start_hash_master<A>(accessor: A,
         }
 
         Ok(())
-    }));
+    })?;
 
     // If we still have a partial piece left over, push it to the workers
     if let Some(piece_buffer) = opt_piece_buffer {
@@ -270,7 +270,7 @@ mod tests {
             for range in self.buffer_ranges.iter() {
                 let mut next_region = Cursor::new(self.contiguous_buffer.index(range.clone()));
 
-                try!(callback(PieceAccess::Compute(&mut next_region)));
+                callback(PieceAccess::Compute(&mut next_region))?;
             }
 
             Ok(())

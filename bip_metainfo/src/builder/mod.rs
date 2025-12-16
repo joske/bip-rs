@@ -215,7 +215,7 @@ impl<'a> MetainfoBuilder<'a> {
         where A: IntoAccessor,
               C: FnMut(f64) + Send + 'static
     {
-        let accessor = try!(accessor.into_accessor());
+        let accessor = accessor.into_accessor()?;
 
         build_with_accessor(threads, accessor, progress, Some(self.root), self.info.info, self.info.piece_length)
     }
@@ -264,7 +264,7 @@ impl<'a> InfoBuilder<'a> {
         where A: IntoAccessor,
               C: FnMut(f64) + Send + 'static
     {
-        let accessor = try!(accessor.into_accessor());
+        let accessor = accessor.into_accessor()?;
 
         build_with_accessor(threads, accessor, progress, None, self.info, self.piece_length)
     }
@@ -286,23 +286,23 @@ fn build_with_accessor<'a, A, C>(threads:       usize,
 
         // Collect all of the file information into a list
         let mut files_info = Vec::new();
-        try!(accessor.access_metadata(|len, path| {
+        accessor.access_metadata(|len, path| {
             let path_list: Vec<String> = path.iter()
                 .map(|os_str| os_str.to_string_lossy().into_owned())
                 .collect();
 
             files_info.push((len, path_list));
-        }));
+        })?;
 
         // Build the pieces for the data our accessor is pointing at
         let total_files_len = files_info.iter().fold(0, |acc, nex| acc + nex.0);
         let piece_length = determine_piece_length(total_files_len, piece_length);
         let total_num_pieces = ((total_files_len as f64) / (piece_length as f64)).ceil() as u64;
-        let pieces_list = try!(worker::start_hasher_workers(&accessor,
-                                                            piece_length,
-                                                            total_num_pieces,
-                                                            threads,
-                                                            progress));
+        let pieces_list = worker::start_hasher_workers(&accessor,
+                                                       piece_length,
+                                                       total_num_pieces,
+                                                       threads,
+                                                       progress)?;
         let pieces = map_pieces_list(pieces_list.into_iter().map(|(_, piece)| piece));
 
         let mut single_file_name = String::new();
