@@ -59,7 +59,7 @@ impl<'a, T> Accessor for &'a T
 /// (though not required).
 pub enum PieceAccess<'a> {
     /// Hash should be computed from the bytes read.
-    Compute(&'a mut Read),
+    Compute(&'a mut dyn Read),
     /// Hash given should be used directly as the next checksum.
     PreComputed(ShaHash)
 }

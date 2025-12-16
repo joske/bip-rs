@@ -305,7 +305,7 @@ fn parse_info_dictionary<'a>(info_bencode: &BencodeRef<'a>) -> ParseResult<Info>
 }
 
 /// Returns whether or not this is a multi file torrent.
-fn is_multi_file_torrent<B>(info_dict: &BDictAccess<B::BKey, B>) -> bool
+fn is_multi_file_torrent<B>(info_dict: &dyn BDictAccess<B::BKey, B>) -> bool
     where B: BRefAccess {
     parse::parse_length(info_dict).is_err()
 }
@@ -343,7 +343,7 @@ pub struct File {
 
 impl File {
     /// Parse the info dictionary and generate a single file File.
-    fn as_single_file<B>(info_dict: &BDictAccess<B::BKey, B>) -> ParseResult<File>
+    fn as_single_file<B>(info_dict: &dyn BDictAccess<B::BKey, B>) -> ParseResult<File>
         where B: BRefAccess {
         let length = try!(parse::parse_length(info_dict));
         let md5sum = parse::parse_md5sum(info_dict).map(|m| m.to_owned());
@@ -357,7 +357,7 @@ impl File {
     }
 
     /// Parse the file dictionary and generate a multi file File.
-    fn as_multi_file<B>(file_dict: &BDictAccess<B::BKey, B>) -> ParseResult<File>
+    fn as_multi_file<B>(file_dict: &dyn BDictAccess<B::BKey, B>) -> ParseResult<File>
         where B: BRefAccess<BType=B> {
         let length = try!(parse::parse_length(file_dict));
         let md5sum = parse::parse_md5sum(file_dict).map(|m| m.to_owned());
